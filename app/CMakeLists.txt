@@ -1,14 +1,6 @@
-set(App)
 add_executable(App)
 target_sources(
   App
-  PRIVATE
-  FILE_SET app_headers
-  TYPE HEADERS
-  BASE_DIRS
-  "${CMAKE_SOURCE_DIR}/include"
-  FILES
-  "${CMAKE_SOURCE_DIR}/include/notification_service/core.hpp"
   PRIVATE
   "main.cpp"
 )
@@ -22,9 +14,10 @@ set_target_properties(
   PROPERTIES
   OUTPUT_NAME "notification-service"
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+  CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}"
 )
 target_link_libraries(
   App
   PRIVATE
-  CoreLib
+  NotificationServiceModule::NotificationServiceModule
 )

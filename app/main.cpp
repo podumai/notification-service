@@ -1,7 +1,7 @@
-#include <notification_service/core.hpp>
+import notification_service;
 
-auto main() -> int
-{
-  notification::core::Hello();
+auto main() -> int {
+  web::NotificationService service{10'000};
+  service.Run();
   return 0;
 }

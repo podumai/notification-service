@@ -12,4 +12,3 @@ WarningsAsErrors: ''
 
 HeaderFilterRegex: '.*'
 FormatStyle: file
-AnalyzeTemporaryDtors: false
