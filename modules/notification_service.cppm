@@ -1,14 +1,14 @@
 module;
 
-#include <simdjson.h>
-#include <spdlog/spdlog.h>
-
 #define BOOST_ASIO_NO_DEPRECATED
 #define BOOST_ASIO_HAS_IO_URING
 #define BOOST_ASIO_DISABLE_EPOLL
+#define BOOST_NO_EXCEPTIONS
+#define BOOST_EXCEPTION_DISABLE
 
 #include <fmt/chrono.h>
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
@@ -16,10 +16,8 @@ module;
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <chrono>
 #include <cstdlib>
-#include <format>
 #include <memory>
 #include <memory_resource>
-#include <optional>
 #include <type_traits>
 
 export module notification_service;
@@ -40,7 +38,7 @@ namespace http = beast::http;
 template<typename = void>
 concept IsNothrowConstructible =
   std::is_nothrow_constructible_v<net::io_context, unsigned> &&
-  std::is_nothrow_constructible_v<std::optional<net::ip::tcp::socket>> &&
+  std::is_nothrow_constructible_v<net::ip::tcp::socket, net::io_context&> &&
   std::is_nothrow_constructible_v<net::ip::tcp::acceptor, net::io_context&, net::ip::tcp::endpoint> &&
   std::is_nothrow_constructible_v<net::signal_set, net::io_context&, decltype(SIGINT), decltype(SIGTERM)>;
 
@@ -67,7 +65,7 @@ class [[nodiscard]] EnableLocalSharedFromThis : public boost::intrusive_ref_coun
 };
 class [[nodiscard]] Connection final : public EnableLocalSharedFromThis<Connection> {
  public:
-  explicit Connection(net::ip::tcp::socket&& socket) : socket_{std::move(socket)} {
+  explicit Connection(net::ip::tcp::socket&& socket) : stream_{std::move(socket)} {
     response_.set(http::field::content_type, "text/plain");
   }
 
@@ -76,19 +74,15 @@ class [[nodiscard]] Connection final : public EnableLocalSharedFromThis<Connecti
    * @private
    * @internal
    */
-  func AsyncRead() -> void {
+  func AsyncRead() noexcept -> void {
+    //   stream_.expires_after(std::chrono::seconds{5});
     http::async_read(
-      socket_,
+      stream_,
       buffer_,
       request_,
-      [self =
-         LocalSharedFromThis()](boost::system::error_code error_code, [[maybe_unused]] size_t /* bytes */) -> void {
+      [self = LocalSharedFromThis()](boost::system::error_code error_code, [[maybe_unused]] size_t) -> void {
         if (error_code) {
-          spdlog::error(
-            "[Notification-Service] message: {}",
-            sizeof(beast::flat_buffer) + sizeof(http::response<http::string_body>) +
-              sizeof(http::request<http::string_body>) + sizeof(net::ip::tcp::socket)
-          );  // error_code.message());
+          spdlog::error("[Notification-Service] message: {}", error_code.message());
           return;
         }
         self->response_.version(self->request_.version());
@@ -105,9 +99,10 @@ class [[nodiscard]] Connection final : public EnableLocalSharedFromThis<Connecti
    * @private
    * @internal
    */
-  func AsyncWrite() -> void {
+  func AsyncWrite() noexcept -> void {
+    //   stream_.expires_after(std::chrono::seconds{3});
     http::async_write(
-      socket_,  //
+      stream_,  //
       response_,
       [self = LocalSharedFromThis()](boost::system::error_code error_code, size_t bytes) -> void {
         if (error_code) {
@@ -128,10 +123,10 @@ class [[nodiscard]] Connection final : public EnableLocalSharedFromThis<Connecti
   func Start() -> void { AsyncRead(); }
 
  private:
-  net::ip::tcp::socket socket_;
+  net::ip::tcp::socket stream_;
+  beast::flat_buffer buffer_{kBufferCapacity};
   http::request<http::string_body> request_;
   http::response<http::string_body> response_{http::status::ok, kHTTPVersion};
-  beast::flat_buffer buffer_{kBufferCapacity};
 };
 
 START_EXPORT_SECTION
@@ -156,15 +151,16 @@ class [[nodiscard]] NotificationService final {
    * @internal
    */
   func AsyncAccept() -> void {
-    socket_.emplace(io_ctx_);
-    acceptor_.async_accept(*socket_, [this](boost::system::error_code error_code) -> void {
+    socket_ = net::ip::tcp::socket{io_ctx_};
+    acceptor_.async_accept(socket_, [this](boost::system::error_code error_code) -> void {
       if (error_code) {
         spdlog::error(error_code.message());
         return;
       }
-      //      std::make_shared<Connection>(std::move(*socket_))->Start();
-      boost::intrusive_ptr<Connection> connection{new Connection{std::move(*socket_)}};
-      connection->Start();
+      boost::intrusive_ptr<Connection> connection{new (std::nothrow) Connection{std::move(socket_)}};
+      if (connection) {
+        connection->Start();
+      }
       AsyncAccept();
     });
   }
@@ -173,7 +169,7 @@ class [[nodiscard]] NotificationService final {
   /**
    * @public
    */
-  func Run() -> void {
+  func Run() noexcept -> void {
     signals_.async_wait([this] [[noreturn]] (boost::system::error_code error_code, int signal) -> void {
       if (error_code) {
         spdlog::error(error_code.message());
@@ -190,7 +186,7 @@ class [[nodiscard]] NotificationService final {
 
  private:
   net::io_context io_ctx_{1};
-  std::optional<net::ip::tcp::socket> socket_;
+  net::ip::tcp::socket socket_{io_ctx_};
   net::ip::tcp::acceptor acceptor_{io_ctx_, {net::ip::tcp::v4(), kDefaultServerPort}};
   net::signal_set signals_{io_ctx_, SIGINT, SIGTERM};
 };

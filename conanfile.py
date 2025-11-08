@@ -6,6 +6,7 @@ class NotificationServiceDeps(ConanFile):
     generators: tuple[str] = ("CMakeToolchain", "CMakeDeps")
 
     def requirements(self) -> None:
+        self.requires("jemalloc/5.3.0")
         self.requires("spdlog/1.16.0")
 
     def build_requirements(self) -> None:

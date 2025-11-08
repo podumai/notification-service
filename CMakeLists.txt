@@ -7,6 +7,7 @@ project(
 )
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_MODULE_PATH}/cmake")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-rtti")
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if($ENV{DEV})
@@ -18,9 +19,10 @@ endif()
 
 set(Boost_USE_DEBUG_LIBS ON)
 set(Boost_USE_RELEASE_LIBS ON)
-set(Boost_USE_MULTITHREADED ON)
+set(Boost_USE_MULTITHREADED FALSE)
 find_package(Boost 1.88.0 REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(jemalloc REQUIRED)
 
 include(FindPkgConfig)
 pkg_check_modules(liburing REQUIRED IMPORTED_TARGET GLOBAL liburing>=2.0)
