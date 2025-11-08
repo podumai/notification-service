@@ -14,7 +14,6 @@ set_target_properties(
   PROPERTIES
   OUTPUT_NAME "notification-service"
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
-  CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}"
 )
 target_link_libraries(
   App

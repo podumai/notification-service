@@ -15,6 +15,7 @@ target_compile_features(
 target_link_libraries(
   NotificationServiceModule
   PRIVATE
+  PkgConfig::liburing
+  spdlog::spdlog
   Boost::boost
-  Boost::log
 )
